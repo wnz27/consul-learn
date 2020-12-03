@@ -1563,22 +1563,86 @@ func makeHTTPFilter(opts listenerFilterOpts) (*envoy_listener_v3.Filter, error) 
 			config.Fields["name"] = &pbstruct.Value{Kind: &pbstruct.Value_StringValue{StringValue: f.Name}}
 			config.Fields["root_id"] = &pbstruct.Value{Kind: &pbstruct.Value_StringValue{StringValue: f.Name}}
 
-			config.Fields["vm_config"] = &pbstruct.Value{
-				Kind: &pbstruct.Value_StructValue{
-					StructValue: &pbstruct.Struct{
-						Fields: map[string]*pbstruct.Value{
-							"vm_id":   {Kind: &pbstruct.Value_StringValue{StringValue: f.Name}},
-							"runtime": {Kind: &pbstruct.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
-							"code": {
-								Kind: &pbstruct.Value_StructValue{
-									StructValue: &pbstruct.Struct{
-										Fields: map[string]*pbstruct.Value{
-											"local": {
-												Kind: &pbstruct.Value_StructValue{
-													StructValue: &pbstruct.Struct{
-														Fields: map[string]*pbstruct.Value{
-															"filename": {
-																Kind: &pbstruct.Value_StringValue{StringValue: f.Location},
+			var code *pbstruct.Value
+
+			if f.LocalFile != "" {
+				code = &pbstruct.Value{
+					Kind: &pbstruct.Value_StructValue{
+						StructValue: &pbstruct.Struct{
+							Fields: map[string]*pbstruct.Value{
+								"local": {
+									Kind: &pbstruct.Value_StructValue{
+										StructValue: &pbstruct.Struct{
+											Fields: map[string]*pbstruct.Value{
+												"filename": {
+													Kind: &pbstruct.Value_StringValue{StringValue: f.LocalFile},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+			} else { // then we must be using a remote file
+				code = &pbstruct.Value{
+					Kind: &pbstruct.Value_StructValue{
+						StructValue: &pbstruct.Struct{
+							Fields: map[string]*pbstruct.Value{
+								"remote": {
+									Kind: &pbstruct.Value_StructValue{
+										StructValue: &pbstruct.Struct{
+											Fields: map[string]*pbstruct.Value{
+												"sha256": {
+													Kind: &pbstruct.Value_StringValue{StringValue: f.RemoteFile.SHA256},
+												},
+												"http_uri": {
+													Kind: &pbstruct.Value_StructValue{
+														StructValue: &pbstruct.Struct{
+															Fields: map[string]*pbstruct.Value{
+																"uri": {
+																	Kind: &pbstruct.Value_StringValue{StringValue: f.RemoteFile.HTTPURI.URI},
+																},
+																"cluster": {
+																	Kind: &pbstruct.Value_StringValue{StringValue: f.RemoteFile.HTTPURI.Cluster},
+																},
+																"timeout": {
+																	Kind: &pbstruct.Value_StructValue{
+																		StructValue: &pbstruct.Struct{
+																			Fields: map[string]*pbstruct.Value{
+																				"seconds": {
+																					Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.HTTPURI.Timeout)},
+																				},
+																			},
+																		},
+																	},
+																},
+															},
+														},
+													},
+												},
+												"retry_policy": {
+													Kind: &pbstruct.Value_StructValue{
+														StructValue: &pbstruct.Struct{
+															Fields: map[string]*pbstruct.Value{
+																"retry_back_off": {
+																	Kind: &pbstruct.Value_StructValue{
+																		StructValue: &pbstruct.Struct{
+																			Fields: map[string]*pbstruct.Value{
+																				"base_interval": {
+																					Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.RetryPolicy.RetryBackOff.BaseInterval)},
+																				},
+																				"max_interval": {
+																					Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.RetryPolicy.RetryBackOff.MaxInterval)},
+																				},
+																			},
+																		},
+																	},
+																},
+																"num_retries": {
+																	Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.RetryPolicy.NumRetries)},
+																},
 															},
 														},
 													},
@@ -1588,6 +1652,18 @@ func makeHTTPFilter(opts listenerFilterOpts) (*envoy_listener_v3.Filter, error) 
 									},
 								},
 							},
+						},
+					},
+				}
+			}
+
+			config.Fields["vm_config"] = &pbstruct.Value{
+				Kind: &pbstruct.Value_StructValue{
+					StructValue: &pbstruct.Struct{
+						Fields: map[string]*pbstruct.Value{
+							"vm_id":   {Kind: &pbstruct.Value_StringValue{StringValue: f.Name}},
+							"runtime": {Kind: &pbstruct.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
+							"code":    code,
 							"allow_precompiled": {
 								Kind: &pbstruct.Value_BoolValue{BoolValue: true},
 							},

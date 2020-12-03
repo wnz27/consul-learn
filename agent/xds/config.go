@@ -187,9 +187,34 @@ type WASMFilter struct {
 	RootID string `mapstructure:"name"`
 
 	// File location for the filter WASM binary
-	Location string `mapstructure:"location"`
+	LocalFile string `mapstructure:"local_file"`
+
+	// Remote location for the filter WASM binary
+	RemoteFile WASMFilterRemoteFile `mapstructure:"remote_file"`
 
 	// Configuration is an arbitrary string which is serialized to bytes and passed
 	// to proxy_on_configure when the plugin initializes.
 	Configuration string `mapstructure:"configuration"`
+}
+
+type WASMFilterRemoteFile struct {
+	HTTPURI     WASMFilterRemoteFileHTTPURI     `mapstructure:"http_uri"`
+	SHA256      string                          `mapstructure:"sha256"`
+	RetryPolicy WASMFilterRemoteFileRetryPolicy `mapstructure:"retry_policy"`
+}
+
+type WASMFilterRemoteFileRetryPolicy struct {
+	RetryBackOff WASMFilterRemoteFileRetryPolicyRetryBackOff `mapstructure:"retry_back_off"`
+	NumRetries   int                                         `mapstructure:"num_retries"`
+}
+
+type WASMFilterRemoteFileRetryPolicyRetryBackOff struct {
+	BaseInterval int64 `mapstructure:"base_interval"`
+	MaxInterval  int64 `mapstructure:"max_interval"`
+}
+
+type WASMFilterRemoteFileHTTPURI struct {
+	URI     string `mapstructure:"uri"`
+	Cluster string `mapstructure:"cluster"`
+	Timeout int64  `mapstructure:"timeout"` // seconds
 }
