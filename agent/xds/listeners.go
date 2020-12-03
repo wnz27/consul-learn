@@ -821,6 +821,7 @@ func (s *ResourceGenerator) makeInboundListener(cfgSnap *proxycfg.ConfigSnapshot
 		routeName:        name,
 		cluster:          LocalAppClusterName,
 		requestTimeoutMs: cfg.LocalRequestTimeoutMs,
+		wasmFilters:      cfg.WASMFilters,
 	}
 	if useHTTPFilter {
 		filterOpts.httpAuthzFilter, err = makeRBACHTTPFilter(
@@ -1491,6 +1492,7 @@ type listenerFilterOpts struct {
 	requestTimeoutMs *int
 	ingressGateway   bool
 	httpAuthzFilter  *envoy_http_v3.HttpFilter
+	wasmFilters      []WASMFilter
 }
 
 func makeListenerFilter(opts listenerFilterOpts) (*envoy_listener_v3.Filter, error) {
@@ -1541,13 +1543,9 @@ func makeStatPrefix(prefix, filterName string) string {
 
 func makeHTTPFilter(opts listenerFilterOpts) (*envoy_listener_v3.Filter, error) {
 	cfg := &envoy_http_v3.HttpConnectionManager{
-		StatPrefix: makeStatPrefix(opts.statPrefix, opts.filterName),
-		CodecType:  envoy_http_v3.HttpConnectionManager_AUTO,
-		HttpFilters: []*envoy_http_v3.HttpFilter{
-			{
-				Name: "envoy.filters.http.router",
-			},
-		},
+		StatPrefix:  makeStatPrefix(opts.statPrefix, opts.filterName),
+		CodecType:   envoy_http_v3.HttpConnectionManager_AUTO,
+		HttpFilters: []*envoy_http_v3.HttpFilter{},
 		Tracing: &envoy_http_v3.HttpConnectionManager_Tracing{
 			// Don't trace any requests by default unless the client application
 			// explicitly propagates trace headers that indicate this should be
@@ -1555,6 +1553,68 @@ func makeHTTPFilter(opts listenerFilterOpts) (*envoy_listener_v3.Filter, error) 
 			RandomSampling: &envoy_type_v3.Percent{Value: 0.0},
 		},
 	}
+
+	// add all custom wasm filters if any are available
+	if len(opts.wasmFilters) > 0 {
+		for _, f := range opts.wasmFilters {
+
+			config := &pbstruct.Struct{Fields: map[string]*pbstruct.Value{}}
+
+			config.Fields["name"] = &pbstruct.Value{Kind: &pbstruct.Value_StringValue{StringValue: f.Name}}
+			config.Fields["root_id"] = &pbstruct.Value{Kind: &pbstruct.Value_StringValue{StringValue: f.Name}}
+
+			config.Fields["vm_config"] = &pbstruct.Value{
+				Kind: &pbstruct.Value_StructValue{
+					StructValue: &pbstruct.Struct{
+						Fields: map[string]*pbstruct.Value{
+							"vm_id":   {Kind: &pbstruct.Value_StringValue{StringValue: f.Name}},
+							"runtime": {Kind: &pbstruct.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
+							"code": {
+								Kind: &pbstruct.Value_StructValue{
+									StructValue: &pbstruct.Struct{
+										Fields: map[string]*pbstruct.Value{
+											"local": {
+												Kind: &pbstruct.Value_StructValue{
+													StructValue: &pbstruct.Struct{
+														Fields: map[string]*pbstruct.Value{
+															"filename": {
+																Kind: &pbstruct.Value_StringValue{StringValue: f.Location},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							"allow_precompiled": {
+								Kind: &pbstruct.Value_BoolValue{BoolValue: true},
+							},
+						},
+					},
+				},
+			}
+
+			hc := &envoyhttp.HttpFilter_Config{
+				Config: &pbstruct.Struct{
+					Fields: map[string]*pbstruct.Value{
+						"config": {Kind: &pbstruct.Value_StructValue{StructValue: config}},
+					},
+				},
+			}
+
+			ef := &envoyhttp.HttpFilter{
+				Name:       "envoy.filters.http.wasm",
+				ConfigType: hc,
+			}
+
+			cfg.HttpFilters = append(cfg.HttpFilters, ef)
+		}
+	}
+
+	// must be the last filter
+	cfg.HttpFilters = append(cfg.HttpFilters, &envoyhttp.HttpFilter{Name: "envoy.router"})
 
 	if opts.useRDS {
 		if opts.cluster != "" {

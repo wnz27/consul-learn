@@ -58,6 +58,17 @@ type ProxyConfig struct {
 	// enable proxies in network namespaces to bind to a different port
 	// than the host port being advertised.
 	BindPort int `mapstructure:"bind_port"`
+
+	// WASMFilters allow Envoy WASM filters to be registers in the public
+	// listeners filter chain.
+	//
+	// Note: Filters will be applied in the same order they are defined in this list.
+	// For HTTP filters, the HTTP Router is always automatically added and will be
+	// the last item in the list.
+	//
+	// See https://docs.google.com/document/d/1YPbxuEIPwKsW4Ft73diHRBTUNbYIlrQHNnS9dXdn778/edit#
+	// for more info
+	WASMFilters []WASMFilter `mapstructure:"wasm_filters"`
 }
 
 // ParseProxyConfig returns the ProxyConfig parsed from the an opaque map. If an
@@ -165,4 +176,20 @@ func ToOutlierDetection(p *structs.PassiveHealthCheck) *envoy_cluster_v3.Outlier
 		od.Consecutive_5Xx = &wrappers.UInt32Value{Value: p.MaxFailures}
 	}
 	return od
+}
+
+// WASMFilter defines a config block for an Envoy listener dynamically loadable WASM filter.
+type WASMFilter struct {
+	// Name of the filter to be registered in the Filter chain
+	Name string `mapstructure:"name"`
+
+	// RootID is the main entry point for the WASM filter
+	RootID string `mapstructure:"name"`
+
+	// File location for the filter WASM binary
+	Location string `mapstructure:"location"`
+
+	// Configuration is an arbitrary string which is serialized to bytes and passed
+	// to proxy_on_configure when the plugin initializes.
+	Configuration string `mapstructure:"configuration"`
 }

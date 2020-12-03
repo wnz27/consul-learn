@@ -83,6 +83,19 @@ func TestListenersFromSnapshot(t *testing.T) {
 			},
 		},
 		{
+			name:   "http-public-listener-wasm-filters",
+			create: proxycfg.TestConfigSnapshot,
+			setup: func(snap *proxycfg.ConfigSnapshot) {
+				snap.Proxy.Config["protocol"] = "http"
+				snap.Proxy.Config["wasm_filters"] = []WASMFilter{
+					{
+						Name:     "add_header",
+						Location: "./optimized.wasm",
+					},
+				}
+			},
+		},
+		{
 			name:   "http-listener-with-timeouts",
 			create: proxycfg.TestConfigSnapshot,
 			setup: func(snap *proxycfg.ConfigSnapshot) {
