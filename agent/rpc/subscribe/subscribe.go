@@ -29,6 +29,7 @@ func NewServer(backend Backend, logger Logger) *Server {
 }
 
 type Logger interface {
+	Debug(msg string, args ...interface{})
 	Trace(msg string, args ...interface{})
 	With(args ...interface{}) hclog.Logger
 }
@@ -79,6 +80,14 @@ func (h *Server) Subscribe(req *pbsubscribe.SubscribeRequest, serverStream pbsub
 		event, ok = filterByAuth(authz, event)
 		if !ok {
 			continue
+		}
+
+		if event.Topic == pbsubscribe.Topic_ServiceHealthConnect {
+			if p, ok := event.Payload.(state.EventPayloadCheckServiceNode); ok {
+				if p.Value.Service.Service == "service-hey" || p.Value.Service.Service == "service-api" {
+					h.Logger.Debug("delivering connect service update for service", "svc", p.Value.Service.Service)
+				}
+			}
 		}
 
 		elog.Trace(event)

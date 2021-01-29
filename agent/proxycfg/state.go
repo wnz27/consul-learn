@@ -783,6 +783,9 @@ func (s *state) handleUpdateUpstreams(u cache.UpdateEvent, snap *ConfigSnapshotU
 			snap.WatchedUpstreamEndpoints[svc] = make(map[string]structs.CheckServiceNodes)
 		}
 		snap.WatchedUpstreamEndpoints[svc][targetID] = resp.Nodes
+		if svc == "service-hey" || svc == "service-api" {
+			s.logger.Info("endpoints updated for service", "svc", svc)
+		}
 
 	case strings.HasPrefix(u.CorrelationID, "mesh-gateway:"):
 		resp, ok := u.Result.(*structs.IndexedNodesWithGateways)
