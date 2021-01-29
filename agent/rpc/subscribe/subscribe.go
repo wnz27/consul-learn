@@ -82,13 +82,13 @@ func (h *Server) Subscribe(req *pbsubscribe.SubscribeRequest, serverStream pbsub
 			continue
 		}
 
-		if event.Topic == pbsubscribe.Topic_ServiceHealthConnect {
-			if p, ok := event.Payload.(state.EventPayloadCheckServiceNode); ok {
-				if p.Value.Service.Service == "service-hey" || p.Value.Service.Service == "service-api" {
-					h.Logger.Debug("delivering connect service update for service", "svc", p.Value.Service.Service)
-				}
-			}
+		// if event.Topic == pbsubscribe.Topic_ServiceHealthConnect {
+		if p, ok := event.Payload.(state.EventPayloadCheckServiceNode); ok {
+			h.Logger.Debug("delivering connect service update for service", "svc", p.Value.Service.Service, "topic", pbsubscribe.Topic_ServiceHealthConnect)
+			// if p.Value.Service.Service == "service-hey" || p.Value.Service.Service == "service-api" {
+			// }
 		}
+		// }
 
 		elog.Trace(event)
 		e := newEventFromStreamEvent(event)
