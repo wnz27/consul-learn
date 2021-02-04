@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 
+	"google.golang.org/grpc/peer"
+
 	"github.com/hashicorp/go-hclog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -50,6 +52,9 @@ func (h *Server) Subscribe(req *pbsubscribe.SubscribeRequest, serverStream pbsub
 	}
 
 	logger.Trace("new subscription")
+	ctx := serverStream.Context()
+	p, _ := peer.FromContext(ctx)
+	logger.Trace("subscription from ip", p.Addr.String())
 	defer logger.Trace("subscription closed")
 
 	entMeta := structs.EnterpriseMetaInitializer(req.Namespace)
@@ -64,7 +69,6 @@ func (h *Server) Subscribe(req *pbsubscribe.SubscribeRequest, serverStream pbsub
 	}
 	defer sub.Unsubscribe()
 
-	ctx := serverStream.Context()
 	elog := &eventLogger{logger: logger}
 	for {
 		event, err := sub.Next(ctx)
