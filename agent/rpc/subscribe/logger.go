@@ -37,14 +37,15 @@ func (s *streamID) String() string {
 	return s.id
 }
 
-func newLoggerForRequest(l Logger, req *pbsubscribe.SubscribeRequest) Logger {
+func newLoggerForRequest(l Logger, req *pbsubscribe.SubscribeRequest, clientAddr string) Logger {
 	return l.With(
 		"topic", req.Topic.String(),
 		"dc", req.Datacenter,
 		"key", req.Key,
 		"namespace", req.Namespace,
 		"index", req.Index,
-		"stream_id", &streamID{})
+		"stream_id", &streamID{},
+		"client_addr", clientAddr)
 }
 
 type eventLogger struct {

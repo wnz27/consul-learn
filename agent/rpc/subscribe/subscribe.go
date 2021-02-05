@@ -45,18 +45,19 @@ type Backend interface {
 }
 
 func (h *Server) Subscribe(req *pbsubscribe.SubscribeRequest, serverStream pbsubscribe.StateChangeSubscription_SubscribeServer) error {
-	logger := newLoggerForRequest(h.Logger, req)
-	handled, err := h.Backend.Forward(req.Datacenter, forwardToDC(req, serverStream, logger))
-	if handled || err != nil {
-		return err
-	}
-
 	ctx := serverStream.Context()
 	peerAddr := "unknown"
 	if p, ok := peer.FromContext(ctx); ok {
 		peerAddr = p.Addr.String()
 	}
-	logger.Trace("new subscription", "client-addr", peerAddr)
+
+	logger := newLoggerForRequest(h.Logger, req, peerAddr)
+	handled, err := h.Backend.Forward(req.Datacenter, forwardToDC(req, serverStream, logger))
+	if handled || err != nil {
+		return err
+	}
+
+	logger.Trace("new subscription")
 	defer logger.Trace("subscription closed")
 
 	entMeta := structs.EnterpriseMetaInitializer(req.Namespace)
