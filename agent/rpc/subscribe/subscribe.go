@@ -51,10 +51,12 @@ func (h *Server) Subscribe(req *pbsubscribe.SubscribeRequest, serverStream pbsub
 		return err
 	}
 
-	logger.Trace("new subscription")
 	ctx := serverStream.Context()
-	p, _ := peer.FromContext(ctx)
-	logger.Trace("subscription from ip", p.Addr.String())
+	peerAddr := "unknown"
+	if p, ok := peer.FromContext(ctx); ok {
+		peerAddr = p.Addr.String()
+	}
+	logger.Trace("new subscription", "client-addr", peerAddr)
 	defer logger.Trace("subscription closed")
 
 	entMeta := structs.EnterpriseMetaInitializer(req.Namespace)
