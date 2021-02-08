@@ -217,6 +217,11 @@ func (c *Catalog) Register(args *structs.RegisterRequest, reply *struct{}) error
 	if respErr, ok := resp.(error); ok {
 		return respErr
 	}
+	if args.Service != nil {
+		if args.Service.Meta["consul_scalability_challenge"] != "" {
+			c.logger.Info("consul scalability challenge service registration event", "service", args.Service.Service)
+		}
+	}
 	return nil
 }
 
@@ -270,6 +275,9 @@ func (c *Catalog) Deregister(args *structs.DeregisterRequest, reply *struct{}) e
 
 	if _, err := c.srv.raftApply(structs.DeregisterRequestType, args); err != nil {
 		return err
+	}
+	if args.ServiceID != "" {
+		c.logger.Info("consul scalability challenge service deregistration event", "serviceID", args.ServiceID)
 	}
 	return nil
 }

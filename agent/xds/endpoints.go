@@ -72,6 +72,8 @@ func (s *Server) endpointsFromSnapshotConnectProxy(cfgSnap *proxycfg.ConfigSnaps
 					cfgSnap.Datacenter,
 				)
 				resources = append(resources, la)
+
+				s.Logger.Info("proxy endpoint change", "datacenter", dc, "service name", u.DestinationName)
 			}
 
 		} else {
@@ -84,6 +86,8 @@ func (s *Server) endpointsFromSnapshotConnectProxy(cfgSnap *proxycfg.ConfigSnaps
 				cfgSnap.ConnectProxy.WatchedGatewayEndpoints[id],
 			)
 			resources = append(resources, es...)
+
+			s.Logger.Info("proxy endpoint change", "datacenter", cfgSnap.Datacenter, "service name", u.DestinationName)
 		}
 	}
 

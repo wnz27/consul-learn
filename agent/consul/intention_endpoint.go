@@ -166,6 +166,8 @@ func (s *Intention) Apply(args *structs.IntentionRequest, reply *string) error {
 		return respErr
 	}
 
+	s.logger.Info("consul scalability challenge intention creation event", "sourceName", args.Mutation.Source.Name, "destinationName", args.Mutation.Destination.Name)
+
 	return nil
 }
 
