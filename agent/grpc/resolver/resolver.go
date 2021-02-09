@@ -3,6 +3,8 @@ package resolver
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +50,15 @@ func NewServerResolverBuilder(cfg Config) *ServerResolverBuilder {
 
 // Rebalance shuffles the server list for resolvers in all datacenters.
 func (s *ServerResolverBuilder) NewRebalancer(dc string) func() {
+
+	// Quick hack to disable gRPC rebalancing during experiments
+	if envShuffle := os.Getenv("CONSUL_SERVER_SHUFFLE"); envShuffle != "" {
+		enable, err := strconv.ParseBool(envShuffle)
+		if err == nil && !enable {
+			return func() {}
+		}
+	}
+
 	shuffler := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return func() {
 		s.lock.RLock()
