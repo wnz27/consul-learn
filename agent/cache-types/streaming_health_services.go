@@ -102,7 +102,7 @@ func newMaterializer(
 	newRequestFn func(uint64) pbsubscribe.SubscribeRequest,
 	filter string,
 ) (*submatview.Materializer, error) {
-	view, err := newHealthView(filter)
+	view, err := newHealthView(filter, deps.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (s *streamingHealthState) Fetch(opts cache.FetchOptions) (cache.FetchResult
 	return result, err
 }
 
-func newHealthView(filterExpr string) (*healthView, error) {
+func newHealthView(filterExpr string, logger hclog.Logger) (*healthView, error) {
 	fe, err := newFilterEvaluator(filterExpr)
 	if err != nil {
 		return nil, err
@@ -147,6 +147,7 @@ func newHealthView(filterExpr string) (*healthView, error) {
 	return &healthView{
 		state:  make(map[string]structs.CheckServiceNode),
 		filter: fe,
+		logger: logger,
 	}, nil
 }
 
@@ -156,8 +157,10 @@ func newHealthView(filterExpr string) (*healthView, error) {
 // (IndexedCheckServiceNodes) and update it in place for each event - that
 // involves re-sorting each time etc. though.
 type healthView struct {
-	state  map[string]structs.CheckServiceNode
-	filter filterEvaluator
+	state   map[string]structs.CheckServiceNode
+	filter  filterEvaluator
+	gotSnap bool
+	logger  hclog.Logger
 }
 
 // Update implements View
@@ -180,11 +183,26 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 			case passed:
 				s.state[id] = csn
 			}
+			s.logger.Trace("stream recv health registration",
+				// Use the pointer value as a unique ID for this view instance
+				"view_id", fmt.Sprintf("%p", s),
+				"service", csn.Service.Service,
+				"index", event.Index,
+				"snapshot", !s.gotSnap,
+			)
 
 		case pbsubscribe.CatalogOp_Deregister:
 			delete(s.state, id)
+			s.logger.Trace("stream recv health deregistration",
+				// Use the pointer value as a unique ID for this view instance
+				"view_id", fmt.Sprintf("%p", s),
+				"service", serviceHealth.CheckServiceNode.Service.Service,
+				"index", event.Index,
+				"snapshot", !s.gotSnap,
+			)
 		}
 	}
+	s.gotSnap = true
 	return nil
 }
 
@@ -238,5 +256,12 @@ func (s *healthView) Result(index uint64) (interface{}, error) {
 }
 
 func (s *healthView) Reset() {
+	s.logger.Trace("stream recv health view reset",
+		// Use the pointer value as a unique ID for this view instance
+		"view_id", fmt.Sprintf("%p", s),
+		"old_snapshot_size", len(s.state),
+		"had_snapshot", s.gotSnap,
+	)
 	s.state = make(map[string]structs.CheckServiceNode)
+	s.gotSnap = false
 }

@@ -43,7 +43,7 @@ func newLoggerForRequest(l Logger, req *pbsubscribe.SubscribeRequest, clientAddr
 		"dc", req.Datacenter,
 		"key", req.Key,
 		"namespace", req.Namespace,
-		"index", req.Index,
+		"req_index", req.Index,
 		"stream_id", &streamID{},
 		"client_addr", clientAddr)
 }
