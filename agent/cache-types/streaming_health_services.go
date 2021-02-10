@@ -173,6 +173,10 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 		}
 
 		id := serviceHealth.CheckServiceNode.UniqueID()
+		svc := serviceHealth.CheckServiceNode.Service.Service
+		if serviceHealth.CheckServiceNode.Service.Kind == structs.ServiceKindConnectProxy {
+			svc = serviceHealth.CheckServiceNode.Service.Proxy.DestinationServiceName
+		}
 		switch serviceHealth.Op {
 		case pbsubscribe.CatalogOp_Register:
 			csn := *pbservice.CheckServiceNodeToStructs(serviceHealth.CheckServiceNode)
@@ -186,7 +190,7 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 			s.logger.Trace("stream recv health registration",
 				// Use the pointer value as a unique ID for this view instance
 				"view_id", fmt.Sprintf("%p", s),
-				"service", csn.Service.Service,
+				"service", svc,
 				"index", event.Index,
 				"snapshot", !s.gotSnap,
 			)
@@ -196,7 +200,7 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 			s.logger.Trace("stream recv health deregistration",
 				// Use the pointer value as a unique ID for this view instance
 				"view_id", fmt.Sprintf("%p", s),
-				"service", serviceHealth.CheckServiceNode.Service.Service,
+				"service", svc,
 				"index", event.Index,
 				"snapshot", !s.gotSnap,
 			)
