@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/go-bexpr"
 	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/go-uuid"
 
 	"github.com/hashicorp/consul/agent/cache"
 	"github.com/hashicorp/consul/agent/structs"
@@ -39,7 +40,7 @@ type StreamingHealthServices struct {
 // so using a shorter TTL ensures the cache entry expires sooner.
 func (c *StreamingHealthServices) RegisterOptions() cache.RegisterOptions {
 	opts := c.RegisterOptionsBlockingRefresh.RegisterOptions()
-	opts.LastGetTTL = 10 * time.Minute
+	opts.LastGetTTL = 30 * time.Minute
 	return opts
 }
 
@@ -65,6 +66,18 @@ func (c *StreamingHealthServices) Fetch(opts cache.FetchOptions, req cache.Reque
 	if opts.LastResult != nil && opts.LastResult.State != nil {
 		return opts.LastResult.State.(*streamingHealthState).Fetch(opts)
 	}
+
+	// Generate a UUID for tracing the submatview instance through traces.
+	viewID, err := uuid.GenerateUUID()
+	if err != nil {
+		return cache.FetchResult{}, err
+	}
+	logger := c.deps.Logger.With("submatview_id", viewID)
+
+	// Make a copy of deps and replace the logger we pass into components so they
+	// all get this trace ID
+	deps := c.deps
+	deps.Logger = logger
 
 	srvReq := req.(*structs.ServiceSpecificRequest)
 	newReqFn := func(index uint64) pbsubscribe.SubscribeRequest {
@@ -93,6 +106,7 @@ func (c *StreamingHealthServices) Fetch(opts cache.FetchOptions, req cache.Reque
 		materializer: materializer,
 		done:         ctx.Done(),
 		cancel:       cancel,
+		logger:       logger,
 	}
 	return state.Fetch(opts)
 }
@@ -126,10 +140,12 @@ type streamingHealthState struct {
 	materializer *submatview.Materializer
 	done         <-chan struct{}
 	cancel       func()
+	logger       hclog.Logger
 }
 
 func (s *streamingHealthState) Close() error {
 	s.cancel()
+	s.logger.Trace("stream health state closed")
 	return nil
 }
 
@@ -188,8 +204,6 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 				s.state[id] = csn
 			}
 			s.logger.Trace("stream recv health registration",
-				// Use the pointer value as a unique ID for this view instance
-				"view_id", fmt.Sprintf("%p", s),
 				"service", svc,
 				"index", event.Index,
 				"snapshot", !s.gotSnap,
@@ -198,8 +212,6 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 		case pbsubscribe.CatalogOp_Deregister:
 			delete(s.state, id)
 			s.logger.Trace("stream recv health deregistration",
-				// Use the pointer value as a unique ID for this view instance
-				"view_id", fmt.Sprintf("%p", s),
 				"service", svc,
 				"index", event.Index,
 				"snapshot", !s.gotSnap,
@@ -260,9 +272,7 @@ func (s *healthView) Result(index uint64) (interface{}, error) {
 }
 
 func (s *healthView) Reset() {
-	s.logger.Trace("stream recv health view reset",
-		// Use the pointer value as a unique ID for this view instance
-		"view_id", fmt.Sprintf("%p", s),
+	s.logger.Trace("stream health view reset",
 		"old_snapshot_size", len(s.state),
 		"had_snapshot", s.gotSnap,
 	)
