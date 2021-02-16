@@ -179,25 +179,32 @@ func (e *EventPublisher) Subscribe(req *SubscribeRequest) (*Subscription, error)
 	if req.Index == 0 && snapFromCache != nil {
 		return e.subscriptions.add(req, snapFromCache.First), nil
 	}
-	snap := newEventSnapshot()
 
-	// if the request has an Index the client view is stale and must be reset
-	// with a NewSnapshotToFollow event.
+	snap := snapFromCache
+	if snapFromCache == nil {
+		// Need a new snapshot that will be stored in the cache (so can't contain
+		// control messages specific to this client like NewSnapshotToFollow).
+		snap = newEventSnapshot()
+		snap.appendAndSplice(*req, handler, topicHead)
+		e.setCachedSnapshotLocked(req, snap)
+	}
+
+	// In the common case, we just return the snapshot buffer directly.
+	result := snap
+
+	// If the request has an Index the client view is stale so we need an extra
+	// control message to make sure it knows to reset based on this latest
+	// snapshot instead of treating these snapshot events as ongoing mutations.
 	if req.Index > 0 {
-		snap.buffer.Append([]Event{{
+		result = newEventSnapshot()
+		result.buffer.Append([]Event{{
 			Topic:   req.Topic,
 			Payload: newSnapshotToFollow{},
 		}})
-
-		if snapFromCache != nil {
-			snap.buffer.AppendItem(snapFromCache.First)
-			return e.subscriptions.add(req, snap.First), nil
-		}
+		result.buffer.AppendItem(snap.First)
 	}
 
-	snap.appendAndSplice(*req, handler, topicHead)
-	e.setCachedSnapshotLocked(req, snap)
-	return e.subscriptions.add(req, snap.First), nil
+	return e.subscriptions.add(req, result.First), nil
 }
 
 func (s *subscriptions) add(req *SubscribeRequest, head *bufferItem) *Subscription {
