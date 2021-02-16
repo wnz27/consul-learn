@@ -40,7 +40,7 @@ type StreamingHealthServices struct {
 // so using a shorter TTL ensures the cache entry expires sooner.
 func (c *StreamingHealthServices) RegisterOptions() cache.RegisterOptions {
 	opts := c.RegisterOptionsBlockingRefresh.RegisterOptions()
-	opts.LastGetTTL = 30 * time.Minute
+	opts.LastGetTTL = 20 * time.Minute
 	return opts
 }
 
@@ -67,19 +67,23 @@ func (c *StreamingHealthServices) Fetch(opts cache.FetchOptions, req cache.Reque
 		return opts.LastResult.State.(*streamingHealthState).Fetch(opts)
 	}
 
+	srvReq := req.(*structs.ServiceSpecificRequest)
+
 	// Generate a UUID for tracing the submatview instance through traces.
 	viewID, err := uuid.GenerateUUID()
 	if err != nil {
 		return cache.FetchResult{}, err
 	}
-	logger := c.deps.Logger.With("submatview_id", viewID)
+	logger := c.deps.Logger.With(
+		"submatview_id", viewID,
+		"service", srvReq.ServiceName,
+	)
 
 	// Make a copy of deps and replace the logger we pass into components so they
 	// all get this trace ID
 	deps := c.deps
 	deps.Logger = logger
 
-	srvReq := req.(*structs.ServiceSpecificRequest)
 	newReqFn := func(index uint64) pbsubscribe.SubscribeRequest {
 		req := pbsubscribe.SubscribeRequest{
 			Topic:      pbsubscribe.Topic_ServiceHealth,
@@ -95,7 +99,7 @@ func (c *StreamingHealthServices) Fetch(opts cache.FetchOptions, req cache.Reque
 		return req
 	}
 
-	materializer, err := newMaterializer(c.deps, newReqFn, srvReq.Filter)
+	materializer, err := newMaterializer(deps, newReqFn, srvReq.Filter)
 	if err != nil {
 		return cache.FetchResult{}, err
 	}
@@ -189,10 +193,6 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 		}
 
 		id := serviceHealth.CheckServiceNode.UniqueID()
-		svc := serviceHealth.CheckServiceNode.Service.Service
-		if serviceHealth.CheckServiceNode.Service.Kind == structs.ServiceKindConnectProxy {
-			svc = serviceHealth.CheckServiceNode.Service.Proxy.DestinationServiceName
-		}
 		switch serviceHealth.Op {
 		case pbsubscribe.CatalogOp_Register:
 			csn := *pbservice.CheckServiceNodeToStructs(serviceHealth.CheckServiceNode)
@@ -204,7 +204,6 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 				s.state[id] = csn
 			}
 			s.logger.Trace("stream recv health registration",
-				"service", svc,
 				"index", event.Index,
 				"snapshot", !s.gotSnap,
 			)
@@ -212,7 +211,6 @@ func (s *healthView) Update(events []*pbsubscribe.Event) error {
 		case pbsubscribe.CatalogOp_Deregister:
 			delete(s.state, id)
 			s.logger.Trace("stream recv health deregistration",
-				"service", svc,
 				"index", event.Index,
 				"snapshot", !s.gotSnap,
 			)
