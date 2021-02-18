@@ -40,7 +40,7 @@ type StreamingHealthServices struct {
 // so using a shorter TTL ensures the cache entry expires sooner.
 func (c *StreamingHealthServices) RegisterOptions() cache.RegisterOptions {
 	opts := c.RegisterOptionsBlockingRefresh.RegisterOptions()
-	opts.LastGetTTL = 20 * time.Second
+	opts.LastGetTTL = 20 * time.Minute
 	return opts
 }
 
