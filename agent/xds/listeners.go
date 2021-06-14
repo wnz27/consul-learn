@@ -1,6 +1,7 @@
 package xds
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -18,12 +19,15 @@ import (
 	envoy_http_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_tcp_proxy_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/tcp_proxy/v3"
 	envoy_tls_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	envoy_wasm_v3 "github.com/envoyproxy/go-control-plane/envoy/extensions/wasm/v3"
 	envoy_type_v3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/any"
+	"github.com/golang/protobuf/ptypes/duration"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/golang/protobuf/ptypes/wrappers"
 
 	"github.com/hashicorp/consul/agent/connect"
@@ -1554,143 +1558,108 @@ func makeHTTPFilter(opts listenerFilterOpts) (*envoy_listener_v3.Filter, error) 
 		},
 	}
 
-	// add all custom wasm filters if any are available
+	// Add all custom WASM filters if any are available
 	if len(opts.wasmFilters) > 0 {
 		for _, f := range opts.wasmFilters {
 
-			config := &pbstruct.Struct{Fields: map[string]*pbstruct.Value{}}
-
-			config.Fields["name"] = &pbstruct.Value{Kind: &pbstruct.Value_StringValue{StringValue: f.Name}}
-			config.Fields["root_id"] = &pbstruct.Value{Kind: &pbstruct.Value_StringValue{StringValue: f.Name}}
-
-			var code *pbstruct.Value
+			var code *envoy_core_v3.AsyncDataSource
 
 			if f.LocalFile != "" {
-				code = &pbstruct.Value{
-					Kind: &pbstruct.Value_StructValue{
-						StructValue: &pbstruct.Struct{
-							Fields: map[string]*pbstruct.Value{
-								"local": {
-									Kind: &pbstruct.Value_StructValue{
-										StructValue: &pbstruct.Struct{
-											Fields: map[string]*pbstruct.Value{
-												"filename": {
-													Kind: &pbstruct.Value_StringValue{StringValue: f.LocalFile},
-												},
-											},
-										},
-									},
-								},
+				code = &envoy_core_v3.AsyncDataSource{
+					Specifier: &envoy_core_v3.AsyncDataSource_Local{
+						Local: &envoy_core_v3.DataSource{
+							Specifier: &envoy_core_v3.DataSource_Filename{
+								Filename: f.LocalFile,
 							},
 						},
 					},
 				}
 			} else { // then we must be using a remote file
-				code = &pbstruct.Value{
-					Kind: &pbstruct.Value_StructValue{
-						StructValue: &pbstruct.Struct{
-							Fields: map[string]*pbstruct.Value{
-								"remote": {
-									Kind: &pbstruct.Value_StructValue{
-										StructValue: &pbstruct.Struct{
-											Fields: map[string]*pbstruct.Value{
-												"sha256": {
-													Kind: &pbstruct.Value_StringValue{StringValue: f.RemoteFile.SHA256},
-												},
-												"http_uri": {
-													Kind: &pbstruct.Value_StructValue{
-														StructValue: &pbstruct.Struct{
-															Fields: map[string]*pbstruct.Value{
-																"uri": {
-																	Kind: &pbstruct.Value_StringValue{StringValue: f.RemoteFile.HTTPURI.URI},
-																},
-																"cluster": {
-																	Kind: &pbstruct.Value_StringValue{StringValue: f.RemoteFile.HTTPURI.Cluster},
-																},
-																"timeout": {
-																	Kind: &pbstruct.Value_StructValue{
-																		StructValue: &pbstruct.Struct{
-																			Fields: map[string]*pbstruct.Value{
-																				"seconds": {
-																					Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.HTTPURI.Timeout)},
-																				},
-																			},
-																		},
-																	},
-																},
-															},
-														},
-													},
-												},
-												"retry_policy": {
-													Kind: &pbstruct.Value_StructValue{
-														StructValue: &pbstruct.Struct{
-															Fields: map[string]*pbstruct.Value{
-																"retry_back_off": {
-																	Kind: &pbstruct.Value_StructValue{
-																		StructValue: &pbstruct.Struct{
-																			Fields: map[string]*pbstruct.Value{
-																				"base_interval": {
-																					Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.RetryPolicy.RetryBackOff.BaseInterval)},
-																				},
-																				"max_interval": {
-																					Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.RetryPolicy.RetryBackOff.MaxInterval)},
-																				},
-																			},
-																		},
-																	},
-																},
-																"num_retries": {
-																	Kind: &pbstruct.Value_NumberValue{NumberValue: float64(f.RemoteFile.RetryPolicy.NumRetries)},
-																},
-															},
-														},
-													},
-												},
-											},
-										},
-									},
+				code = &envoy_core_v3.AsyncDataSource{
+					Specifier: &envoy_core_v3.AsyncDataSource_Remote{
+						Remote: &envoy_core_v3.RemoteDataSource{
+							Sha256: f.RemoteFile.SHA256,
+							HttpUri: &envoy_core_v3.HttpUri{
+								Uri: f.RemoteFile.HTTPURI.URI,
+								HttpUpstreamType: &envoy_core_v3.HttpUri_Cluster{
+									Cluster: f.RemoteFile.HTTPURI.Cluster,
 								},
+								Timeout: &duration.Duration{Seconds: f.RemoteFile.HTTPURI.Timeout},
+							},
+							RetryPolicy: &envoy_core_v3.RetryPolicy{
+								RetryBackOff: &envoy_core_v3.BackoffStrategy{
+									BaseInterval: &duration.Duration{Seconds: f.RemoteFile.RetryPolicy.RetryBackOff.BaseInterval},
+									MaxInterval:  &duration.Duration{Seconds: f.RemoteFile.RetryPolicy.RetryBackOff.MaxInterval},
+								},
+								NumRetries: &wrappers.UInt32Value{Value: uint32(f.RemoteFile.RetryPolicy.NumRetries)},
 							},
 						},
 					},
 				}
 			}
 
-			config.Fields["vm_config"] = &pbstruct.Value{
-				Kind: &pbstruct.Value_StructValue{
-					StructValue: &pbstruct.Struct{
-						Fields: map[string]*pbstruct.Value{
-							"vm_id":   {Kind: &pbstruct.Value_StringValue{StringValue: f.Name}},
-							"runtime": {Kind: &pbstruct.Value_StringValue{StringValue: "envoy.wasm.runtime.v8"}},
-							"code":    code,
-							"allow_precompiled": {
-								Kind: &pbstruct.Value_BoolValue{BoolValue: true},
-							},
-						},
+			wasm_plugin_config := &envoy_wasm_v3.PluginConfig{
+				Name: f.Name,
+				VmConfig: &envoy_wasm_v3.PluginConfig_InlineVmConfig{
+					InlineVmConfig: &envoy_wasm_v3.VmConfig{
+						VmId:             f.Name,
+						Runtime:          "envoy.wasm.runtime.v8",
+						Code:             code,
+						AllowPrecompiled: true,
 					},
 				},
 			}
 
-			hc := &envoyhttp.HttpFilter_Config{
-				Config: &pbstruct.Struct{
-					Fields: map[string]*pbstruct.Value{
-						"config": {Kind: &pbstruct.Value_StructValue{StructValue: config}},
+			// Add configuration if present
+			if f.Configuration != "" {
+				configuration, err := ptypes.MarshalAny(&wrappers.StringValue{
+					Value: f.Configuration,
+				})
+				if err != nil {
+					return nil, err
+				}
+				wasm_plugin_config.Configuration = configuration
+			}
+
+			// Do a little dance to create the WASM filter config
+			m := jsonpb.Marshaler{OrigName: true}
+			buf := &bytes.Buffer{}
+			err := m.Marshal(buf, wasm_plugin_config)
+			if err != nil {
+				return nil, err
+			}
+
+			s := &structpb.Struct{}
+			err = jsonpb.Unmarshal(buf, s)
+			if err != nil {
+				return nil, err
+			}
+
+			config := &structpb.Struct{
+				Fields: map[string]*structpb.Value{
+					"@type": {
+						Kind: &structpb.Value_StringValue{StringValue: "type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm"},
+					},
+					"config": {
+						Kind: &structpb.Value_StructValue{StructValue: s},
 					},
 				},
 			}
-
-			ef := &envoyhttp.HttpFilter{
+			envoy_wasm_filter_config_any, err := ptypes.MarshalAny(envoy_wasm_filter_config)
+			if err != nil {
+				return nil, err
+			}
+			envoy_wasm_filter := &envoy_http_v3.HttpFilter{
 				Name:       "envoy.filters.http.wasm",
-				ConfigType: hc,
+				ConfigType: &envoy_http_v3.HttpFilter_TypedConfig{TypedConfig: envoy_wasm_filter_config_any},
 			}
 
-			cfg.HttpFilters = append(cfg.HttpFilters, ef)
+			cfg.HttpFilters = append(cfg.HttpFilters, envoy_wasm_filter)
 		}
 	}
 
 	// must be the last filter
-	cfg.HttpFilters = append(cfg.HttpFilters, &envoyhttp.HttpFilter{Name: "envoy.router"})
+	cfg.HttpFilters = append(cfg.HttpFilters, &envoy_http_v3.HttpFilter{Name: "envoy.router"})
 
 	if opts.useRDS {
 		if opts.cluster != "" {
