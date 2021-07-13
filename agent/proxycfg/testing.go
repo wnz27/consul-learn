@@ -1663,6 +1663,15 @@ func testConfigSnapshotIngressGateway(
 					},
 				},
 			},
+			Listeners: map[IngressListenerKey]structs.IngressListener{
+				{protocol, 9191}: {
+					Port:     9191,
+					Protocol: protocol,
+					Services: []structs.IngressService{
+						{Name: "db"},
+					},
+				},
+			},
 		}
 	}
 	return snap
