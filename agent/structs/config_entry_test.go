@@ -852,6 +852,24 @@ func TestDecodeConfigEntry(t *testing.T) {
 							},
 							{
 								name = "db"
+								request_headers {
+									add {
+										foo = "bar"
+									}
+									set {
+										bar = "baz"
+									}
+									remove = ["qux"]
+								}
+								response_headers {
+									add {
+										foo = "bar"
+									}
+									set {
+										bar = "baz"
+									}
+									remove = ["qux"]
+								}
 							}
 						]
 					},
@@ -896,6 +914,24 @@ func TestDecodeConfigEntry(t *testing.T) {
 							},
 							{
 								Name = "db"
+								RequestHeaders {
+									Add {
+										foo = "bar"
+									}
+									Set {
+										bar = "baz"
+									}
+									Remove = ["qux"]
+								}
+								ResponseHeaders {
+									Add {
+										foo = "bar"
+									}
+									Set {
+										bar = "baz"
+									}
+									Remove = ["qux"]
+								}
 							}
 						]
 					},
@@ -940,6 +976,16 @@ func TestDecodeConfigEntry(t *testing.T) {
 							},
 							{
 								Name: "db",
+								RequestHeaders: &HTTPHeaderModifiers{
+									Add:    map[string]string{"foo": "bar"},
+									Set:    map[string]string{"bar": "baz"},
+									Remove: []string{"qux"},
+								},
+								ResponseHeaders: &HTTPHeaderModifiers{
+									Add:    map[string]string{"foo": "bar"},
+									Set:    map[string]string{"bar": "baz"},
+									Remove: []string{"qux"},
+								},
 							},
 						},
 					},
