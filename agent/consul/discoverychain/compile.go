@@ -620,6 +620,14 @@ func newDefaultServiceRoute(serviceName string, namespace string) *structs.Servi
 	}
 }
 
+func newDefaultServiceSplit(serviceName string, namespace string) *structs.ServiceSplit {
+	return &structs.ServiceSplit{
+		Weight:    100,
+		Service:   serviceName,
+		Namespace: namespace,
+	}
+}
+
 func (c *compiler) newTarget(service, serviceSubset, namespace, datacenter string) *structs.DiscoveryTarget {
 	if service == "" {
 		panic("newTarget called with empty service which makes no sense")
