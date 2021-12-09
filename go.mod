@@ -23,7 +23,7 @@ require (
 	github.com/envoyproxy/go-control-plane v0.9.5
 	github.com/frankban/quicktest v1.11.0 // indirect
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.3.5
+	github.com/golang/protobuf v1.4.3
 	github.com/google/go-cmp v0.5.6
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/google/gofuzz v1.2.0
@@ -62,7 +62,6 @@ require (
 	github.com/hashicorp/yamux v0.0.0-20210826001029-26ff87cf9493
 	github.com/imdario/mergo v0.3.6
 	github.com/joyent/triton-go v1.7.1-0.20200416154420-6801d15b779f // indirect
-	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/kr/text v0.1.0
 	github.com/miekg/dns v1.1.41
 	github.com/mitchellh/cli v1.1.0
@@ -76,7 +75,7 @@ require (
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/pquerna/cachecontrol v0.0.0-20180517163645-1555304b9b35 // indirect
-	github.com/prometheus/client_golang v1.4.0
+	github.com/prometheus/client_golang v1.11.0
 	github.com/rboyer/safeio v0.2.1
 	github.com/ryanuber/columnize v2.1.0+incompatible
 	github.com/shirou/gopsutil/v3 v3.21.10
